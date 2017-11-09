@@ -47,6 +47,7 @@
 #include "tiny_dnn/activations/softsign_layer.h"
 #include "tiny_dnn/activations/tanh_layer.h"
 #include "tiny_dnn/activations/tanh_p1m2_layer.h"
+#include "tiny_dnn/activations/tanhpoly2_layer.h"
 
 #ifdef CNN_USE_GEMMLOWP
 #include "tiny_dnn/layers/quantized_fully_connected_layer.h"
@@ -82,6 +83,7 @@ CEREAL_REGISTER_TYPE(tiny_dnn::softplus_layer)
 CEREAL_REGISTER_TYPE(tiny_dnn::softsign_layer)
 CEREAL_REGISTER_TYPE(tiny_dnn::tanh_layer)
 CEREAL_REGISTER_TYPE(tiny_dnn::tanh_p1m2_layer)
+CEREAL_REGISTER_TYPE(tiny_dnn::tanhpoly2_layer)
 #endif  // CNN_NO_SERIALIZATION
 
 // shortcut version of layer names
@@ -149,6 +151,8 @@ using tanh_p1m2 = tiny_dnn::tanh_p1m2_layer;
 using softplus = tiny_dnn::softplus_layer;
 
 using softsign = tiny_dnn::softsign_layer;
+
+using tanhpoly2 = tiny_dnn::tanhpoly2_layer;
 
 }  // namespace activation
 

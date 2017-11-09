@@ -47,6 +47,8 @@ void register_layers(T* h) {
   h->template register_layer<softplus_layer>("softplus");
   h->template register_layer<softsign_layer>("softsign");
   h->template register_layer<selu_layer>("selu");
+  
+  h->template register_layer<tanhpoly2_layer>("tanhpoly2");
 }
 
 }  // namespace tiny_dnn

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <string>
+#include <cstdarg>
 
 #include "tiny_dnn/config.h"
 
@@ -44,6 +45,7 @@ inline const char *getColorEscape(Color c) {
 }
 #endif
 
+
 inline void coloredPrint(Color c, const char *fmt, ...) {
   va_list args;
   va_start(args, fmt);
@@ -74,5 +76,6 @@ inline void coloredPrint(Color c, const char *fmt, ...) {
 inline void coloredPrint(Color c, const std::string &msg) {
   coloredPrint(c, msg.c_str());
 }
+  
 
 }  // namespace tiny_dnn

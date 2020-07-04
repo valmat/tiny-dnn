@@ -150,6 +150,34 @@ class cross_entropy_multiclass {
   }
 };
 
+// gain loss function
+// This is a modification of the cosine distances
+class gain {
+ public:
+  static float_t f(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    float_t d{0};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      d += -(t[i] - float_t(0.5)) * (y[i] - float_t(0.5));
+    }
+
+    return d;
+  }
+
+  static vec_t df(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    vec_t d(t.size());
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      d[i] = float_t(0.5) - t[i];
+    }
+
+    return d;
+  }
+};
+
+
 template <typename E>
 vec_t gradient(const vec_t &y, const vec_t &t) {
   assert(y.size() == t.size());

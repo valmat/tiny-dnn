@@ -157,20 +157,29 @@ class gain {
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t d{0};
+    float_t t2{0};
 
     for (size_t i = 0; i < y.size(); ++i) {
-      d += -(t[i] - float_t(0.5)) * (y[i] - float_t(0.5));
+      float_t ti = (t[i] - float_t(0.5));
+      d  += ti * (y[i] - float_t(0.5));
+      t2 += ti * ti;
     }
 
-    return d;
+    return float_t(1.0) - d / t2;
   }
 
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t d(t.size());
 
-    for (size_t i = 0; i < y.size(); ++i) {
-      d[i] = float_t(0.5) - t[i];
+    float_t t2{0};
+    for (size_t i = 0; i < t.size(); ++i) {
+      float_t ti = (t[i] - float_t(0.5));
+      t2 += ti * ti;
+    }    
+
+    for (size_t i = 0; i < t.size(); ++i) {
+      d[i] = (float_t(0.5) - t[i]) / t2;
     }
 
     return d;

@@ -150,17 +150,19 @@ class cross_entropy_multiclass {
   }
 };
 
-// Loss function based on cosine distances
-class cosine {
- public:
-  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|) ) / 2  ( in [0, 1] )
-  static float_t f(const vec_t &y, const vec_t &t) {
-    assert(y.size() == t.size());
-    float_t yt{0.0};
-    float_t t2{0.0};
-    float_t y2{0.0};
-    float_t m {0.5};
+// helper struct
+struct _norms
+{
+    float_t yt = 0.0;
+    float_t y2 = 0.0;
+    float_t t2 = 0.0;
+    float_t y_abs;
+    float_t t_abs;
 
+  _norms (const vec_t &y, const vec_t &t) noexcept
+  {
+    assert(y.size() == t.size());
+    float_t m {0.5};
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti = (t[i] - m);
       float_t yi = (y[i] - m);
@@ -168,12 +170,24 @@ class cosine {
       t2 += ti * ti;
       y2 += yi * yi;
     }
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
+    y_abs = sqrt(y2);
+    t_abs = sqrt(t2);
+  }
+};
+
+// Loss function based on cosine distances
+class cosine {
+ public:
+  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|) ) / 2  ( in [0, 1] )
+  static float_t f(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    
+    float_t m {0.5};
+    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
     return (0.0 == y_abs || 0.0 == t_abs) ?
       m :
-      m * ( float_t(1) - yt / (t_abs * y_abs) );
+      m * ( 1.0 - yt / (t_abs * y_abs) );
   }
 
   // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2
@@ -181,33 +195,21 @@ class cosine {
     assert(y.size() == t.size());
     vec_t grad(t.size());
 
-    float_t yt{0.0};
-    float_t t2{0.0};
-    float_t y2{0.0};
     float_t m {0.5};
+    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
-    for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      yt += ti * yi;
-      t2 += ti * ti;
-      y2 += yi * yi;
-    }
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
-
+    float_t d = y2 * y_abs * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti = (t[i] - m);
       float_t yi = (y[i] - m);
       grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
         0.0 :
-        m * (yt * yi - y2 * ti) / (y2 * y_abs * t_abs);
+        (m * (yt * yi - y2 * ti) / d);
     }    
 
     return grad;
   }
 };
-
 
 // fined cosine loss function
 // Modification of previous with adding fine
@@ -220,24 +222,13 @@ class fined_cosine
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
 
-    float_t yt{0.0};
-    float_t t2{0.0};
-    float_t y2{0.0};
     float_t m {0.5};
-
-    for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      yt += ti * yi;
-      t2 += ti * ti;
-      y2 += yi * yi;
-    }
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
+    [[maybe_unused]]
+    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
     return (0.0 == y_abs || 0.0 == t_abs) ?
-      m + fine * y_abs :
-      m * ( float_t(1) - yt / (t_abs*y_abs) ) + fine * y_abs;
+      (m + fine * y_abs) :
+      (m * ( 1.0 - yt / (t_abs*y_abs) ) + fine * y_abs);
   }
 
   // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2 + fine * (y-m) / |y-m|
@@ -246,27 +237,17 @@ class fined_cosine
     vec_t grad(t.size());
     float_t fine{1.0 / fine_fract};
 
-    float_t yt{0.0};
-    float_t t2{0.0};
-    float_t y2{0.0};
     float_t m {0.5};
+    [[maybe_unused]]
+    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
-    for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      yt += ti * yi;
-      t2 += ti * ti;
-      y2 += yi * yi;
-    }
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
-
+    float_t d = y2 * y_abs * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti = (t[i] - m);
       float_t yi = (y[i] - m);
       grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
         ( (0.0 == y_abs) ? 0.0 : fine * yi / y_abs ) :
-        m * (yt * yi - y2 * ti) / (y2 * y_abs * t_abs) + fine * yi / y_abs;
+        ( m * (yt * yi - y2 * ti) / d + fine * yi / y_abs );
     }    
 
     return grad;
@@ -292,7 +273,7 @@ class gain {
       t2        += ti * ti;
     }
 
-    return float_t(1.0) - yt / t2;
+    return (0.0 == t2) ? 1.0 : (1.0 - yt / t2);
   }
 
   // - (t-m) / <t-m,t-m>
@@ -308,7 +289,7 @@ class gain {
     }    
 
     for (size_t i = 0; i < t.size(); ++i) {
-      grad[i] = (m - t[i]) / t2;
+      grad[i] = (0.0 == t2) ? 0.0 : (m - t[i]) / t2;
     }
 
     return grad;
@@ -327,23 +308,13 @@ class fined_gain
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
 
-    float_t yt{0.0};
-    float_t t2{0.0};
-    float_t y2{0.0};
-    float_t m {0.5};
+    [[maybe_unused]]
+    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
-    for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      yt        += ti * yi;
-      t2        += ti * ti;
-      y2        += yi * yi;
-    }
-
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
-
-    return float_t(1.0) - (yt - fine * y_abs) / (t2 - fine * t_abs);
+    float_t d = t2 - fine * t_abs;
+    return (0.0 == d) ?
+      float_t(1.0) :
+      float_t(1.0) - (yt - fine * y_abs) / d;
   }
 
   //  - ( (y-m) - fine*(y-m)/|y-m|) / (<t-m,t-m> - fine*|t-m|)
@@ -365,9 +336,11 @@ class fined_gain
     float_t y_abs = sqrt(y2);
     float_t t_abs = sqrt(t2);
 
+    float_t d  = t2 - fine * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t yi = (y[i] - m);
-      grad[i]    = - ( yi - fine * yi / y_abs) / (t2 - fine * t_abs);
+      grad[i] = (0.0 == d || 0.0 == y_abs) ? 
+        0.0 :
+        (y[i] - m) * (fine / y_abs - 1.0) / d;
     }
 
     return grad;

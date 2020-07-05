@@ -154,23 +154,25 @@ class cross_entropy_multiclass {
 // This is a modification of the cosine distances
 class gain {
  public:
+  // 1 - <y-m, t-m> / <t-m,t-m>
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
-    float_t d{0};
+    float_t yt{0};
     float_t t2{0};
 
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti = (t[i] - float_t(0.5));
-      d  += ti * (y[i] - float_t(0.5));
+      yt += ti * (y[i] - float_t(0.5));
       t2 += ti * ti;
     }
 
-    return float_t(1.0) - d / t2;
+    return float_t(1.0) - yt / t2;
   }
 
+  // - (t-m) / <t-m,t-m>
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
-    vec_t d(t.size());
+    vec_t grad(t.size());
 
     float_t t2{0};
     for (size_t i = 0; i < t.size(); ++i) {
@@ -179,12 +181,73 @@ class gain {
     }    
 
     for (size_t i = 0; i < t.size(); ++i) {
-      d[i] = (float_t(0.5) - t[i]) / t2;
+      grad[i] = (float_t(0.5) - t[i]) / t2;
     }
 
-    return d;
+    return grad;
   }
 };
+
+
+// fined gain loss function
+// Modification of previous with adding fine
+template<int fine_fract>
+class fined_gain
+{
+ public:
+  // 1 - (<y-m, t-m> - fine*|y-m|) / (<t-m,t-m> - fine*|t-m|)
+  static float_t f(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    float_t fine{1.0 / fine_fract};
+
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      yt        += ti * yi;
+      t2        += ti * ti;
+      y2        += yi * yi;
+    }
+
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    return float_t(1.0) - (yt - fine * y_abs) / (t2 - fine * t_abs);
+  }
+
+  //  - ( (y-m) - fine*(y-m)/|y-m|) / (<t-m,t-m> - fine*|t-m|)
+  static vec_t df(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    float_t fine{1.0 / fine_fract};
+    vec_t grad(t.size());
+
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+    for (size_t i = 0; i < t.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      t2        += ti * ti;
+      y2        += yi * yi;
+    } 
+    
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t yi = (y[i] - m);
+      grad[i]    = - ( yi - fine * yi / y_abs) / (t2 - fine * t_abs);
+    }
+
+    return grad;
+  }
+};
+
+using fined_gain01 = fined_gain<10>;
 
 
 template <typename E>

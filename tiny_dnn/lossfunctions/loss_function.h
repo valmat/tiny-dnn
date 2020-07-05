@@ -150,6 +150,131 @@ class cross_entropy_multiclass {
   }
 };
 
+// Loss function based on cosine distances
+class cosine {
+ public:
+  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|) ) / 2  ( in [0, 1] )
+  static float_t f(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      yt += ti * yi;
+      t2 += ti * ti;
+      y2 += yi * yi;
+    }
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    return (0.0 == y_abs || 0.0 == t_abs) ?
+      m :
+      m * ( float_t(1) - yt / (t_abs * y_abs) );
+  }
+
+  // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2
+  static vec_t df(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    vec_t grad(t.size());
+
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      yt += ti * yi;
+      t2 += ti * ti;
+      y2 += yi * yi;
+    }
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
+        0.0 :
+        m * (yt * yi - y2 * ti) / (y2 * y_abs * t_abs);
+    }    
+
+    return grad;
+  }
+};
+
+
+// fined cosine loss function
+// Modification of previous with adding fine
+template<int fine_fract>
+class fined_cosine
+{
+ public:
+  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|)) / 2 + fine * |y-m|
+  static float_t f(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    float_t fine{1.0 / fine_fract};
+
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      yt += ti * yi;
+      t2 += ti * ti;
+      y2 += yi * yi;
+    }
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    return (0.0 == y_abs || 0.0 == t_abs) ?
+      m + fine * y_abs :
+      m * ( float_t(1) - yt / (t_abs*y_abs) ) + fine * y_abs;
+  }
+
+  // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2 + fine * (y-m) / |y-m|
+  static vec_t df(const vec_t &y, const vec_t &t) {
+    assert(y.size() == t.size());
+    vec_t grad(t.size());
+    float_t fine{1.0 / fine_fract};
+
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t y2{0.0};
+    float_t m {0.5};
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      yt += ti * yi;
+      t2 += ti * ti;
+      y2 += yi * yi;
+    }
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = (t[i] - m);
+      float_t yi = (y[i] - m);
+      grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
+        ( (0.0 == y_abs) ? 0.0 : fine * yi / y_abs ) :
+        m * (yt * yi - y2 * ti) / (y2 * y_abs * t_abs) + fine * yi / y_abs;
+    }    
+
+    return grad;
+  }
+};
+
+using fined_cosine01 = fined_cosine<10>;
+
 // gain loss function
 // This is a modification of the cosine distances
 class gain {
@@ -157,13 +282,14 @@ class gain {
   // 1 - <y-m, t-m> / <t-m,t-m>
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
-    float_t yt{0};
-    float_t t2{0};
+    float_t yt{0.0};
+    float_t t2{0.0};
+    float_t m {0.5};
 
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - float_t(0.5));
-      yt += ti * (y[i] - float_t(0.5));
-      t2 += ti * ti;
+      float_t ti = (t[i] - m);
+      yt        += ti * (y[i] - m);
+      t2        += ti * ti;
     }
 
     return float_t(1.0) - yt / t2;
@@ -175,13 +301,14 @@ class gain {
     vec_t grad(t.size());
 
     float_t t2{0};
+    float_t m {0.5};
     for (size_t i = 0; i < t.size(); ++i) {
-      float_t ti = (t[i] - float_t(0.5));
-      t2 += ti * ti;
+      float_t ti = (t[i] - m);
+      t2        += ti * ti;
     }    
 
     for (size_t i = 0; i < t.size(); ++i) {
-      grad[i] = (float_t(0.5) - t[i]) / t2;
+      grad[i] = (m - t[i]) / t2;
     }
 
     return grad;

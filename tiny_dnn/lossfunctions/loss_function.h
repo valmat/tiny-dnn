@@ -302,44 +302,55 @@ template<int fine_fract>
 class fined_gain
 {
  public:
-  // 1 - (<y, t> - fine*|y|) / (<t,t> - fine*|t|)
+  // 2 - (<y, t> - fine(y)) / (<t,t> - fine(t))
+  // fine(y) = fine * (sum |yi|)
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
 
-    [[maybe_unused]]
-    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
+    float_t yt        = 0.0;
+    float_t t2        = 0.0;
+    
+    float_t abs_sum_y = 0.0;
+    float_t abs_sum_t = 0.0;
 
-    float_t d = t2 - fine * t_abs;
-    return (0.0 == d) ?
-      float_t(1.0) :
-      float_t(1.0) - (yt - fine * y_abs) / d;
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
+      yt        += ti * yi;
+      t2        += ti * ti;
+      abs_sum_y += abs(yi);
+      abs_sum_t += abs(ti);
+    }
+
+    float_t d = (0.0 == t2 - fine * abs_sum_t) ? 1.0 : t2 - fine * abs_sum_t;
+    
+    return 2.0 - (yt - fine * abs_sum_y) / d;
   }
 
-  //  - ( (y) - fine*(y)/|y|) / (<t,t> - fine*|t|)
+  // -2 * ( t - ∇fine(y)) / (|t|^2 - fine(t))
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
     vec_t grad(t.size());
 
-    float_t t2{0.0};
-    float_t y2{0.0};
-    float_t m {0.5};
-    for (size_t i = 0; i < t.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      t2        += ti * ti;
-      y2        += yi * yi;
-    } 
+    float_t t2        = 0.0;
+    float_t abs_sum_t = 0.0;
     
-    float_t y_abs = sqrt(y2);
-    float_t t_abs = sqrt(t2);
-
-    float_t d  = t2 - fine * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
-      grad[i] = (0.0 == d || 0.0 == y_abs) ? 
-        0.0 :
-        (y[i] - m) * (fine / y_abs - 1.0) / d;
+      float_t ti = 2.0 * (t[i] - 0.5);
+      t2        += ti * ti;
+      abs_sum_t += abs(ti);
+    }
+
+    float_t d = (0.0 == t2 - fine * abs_sum_t) ? 1.0 : t2 - fine * abs_sum_t;
+
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti   = 2.0 * (t[i] - 0.5);
+      float_t yi   = 2.0 * (y[i] - 0.5);
+      float_t df_y = (yi > 0) ? 1.0 : -1.0;
+      
+      grad[i] =  -2.0 * (ti - fine * df_y) / d;
     }
 
     return grad;

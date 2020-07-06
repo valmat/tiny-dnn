@@ -216,39 +216,80 @@ template<int fine_fract>
 class fined_cosine
 {
  public:
-  // ( 1 - <y, t> / (|t|*|y|)) / 2 + fine * |y|
+  // 1 - (<y,t> - fine(y)) / (|t|*|y| - fine(t))
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
+    
+    float_t yt        = 0.0;
+    float_t y2        = 0.0;
+    float_t t2        = 0.0;
+    
+    float_t abs_sum_y = 0.0;
+    float_t abs_sum_t = 0.0;
 
-    float_t m {0.5};
-    [[maybe_unused]]
-    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
+    for (size_t i = 0; i < y.size(); ++i) {
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
+      yt        += ti * yi;
+      y2        += yi * yi;
+      t2        += ti * ti;
+      abs_sum_y += abs(yi);
+      abs_sum_t += abs(ti);
+    }
+    
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
 
-    return (0.0 == y_abs || 0.0 == t_abs) ?
-      (m + fine * y_abs) :
-      (m * ( 1.0 - yt / (t_abs*y_abs) ) + fine * y_abs);
+    float_t d =  y_abs * t_abs - fine * abs_sum_t;
+
+    return (0.0 == d) ?
+      1.0 :
+      1.0 - (yt - fine * abs_sum_y) / d;
   }
 
-  // (<y, t> * (y) - |y|^2 * (t)  ) / (|t|*|y|^3) / 2 + fine * (y) / |y|
+  // Complex formula
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());
     float_t fine{1.0 / fine_fract};
 
-    float_t m {0.5};
-    [[maybe_unused]]
-    auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
+    float_t yt        = 0.0;
+    float_t y2        = 0.0;
+    float_t t2        = 0.0;
+    
+    float_t abs_sum_y = 0.0;
+    float_t abs_sum_t = 0.0;
 
-    float_t d = y2 * y_abs * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti = 2.0 * (t[i] - 0.5);
       float_t yi = 2.0 * (y[i] - 0.5);
-      grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
-        ( (0.0 == y_abs) ? 0.0 : fine * yi / y_abs ) :
-        ( m * (yt * yi - y2 * ti) / d + fine * yi / y_abs );
-    }    
+      yt        += ti * yi;
+      y2        += yi * yi;
+      t2        += ti * ti;
+      abs_sum_y += abs(yi);
+      abs_sum_t += abs(ti);
+    }
+    
+    float_t y_abs = sqrt(y2);
+    float_t t_abs = sqrt(t2);
 
+    float_t d =  y_abs * t_abs - fine * abs_sum_t;
+    if(0.0 == d) {
+      std::fill(grad.begin(), grad.end(), 0.0);
+    } else {
+      for (size_t i = 0; i < y.size(); ++i) {
+        float_t ti   = 2.0 * (t[i] - 0.5);
+        float_t yi   = 2.0 * (y[i] - 0.5);
+        float_t df_y = (yi > 0) ? fine : -fine;
+
+        float_t tmp1 = -(ti - df_y) / d;
+        float_t tmp2 = t_abs * yi * (yt - fine * abs_sum_y) / (y_abs * d * d);
+
+        grad[i] = 2.0 * (tmp1 + tmp2);
+      }
+    }
+    
     return grad;
   }
 };
@@ -348,9 +389,9 @@ class fined_gain
     for (size_t i = 0; i < y.size(); ++i) {
       float_t ti   = 2.0 * (t[i] - 0.5);
       float_t yi   = 2.0 * (y[i] - 0.5);
-      float_t df_y = (yi > 0) ? 1.0 : -1.0;
+      float_t df_y = (yi > 0) ? fine : -fine;
       
-      grad[i] =  -2.0 * (ti - fine * df_y) / d;
+      grad[i] =  -2.0 * (ti - df_y) / d;
     }
 
     return grad;

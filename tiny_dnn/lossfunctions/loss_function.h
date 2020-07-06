@@ -162,10 +162,10 @@ struct _norms
   _norms (const vec_t &y, const vec_t &t) noexcept
   {
     assert(y.size() == t.size());
-    float_t m {0.5};
+    
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
       yt += ti * yi;
       t2 += ti * ti;
       y2 += yi * yi;
@@ -178,33 +178,32 @@ struct _norms
 // Loss function based on cosine distances
 class cosine {
  public:
-  // ( 1 - <y, t> / (|t|*|y|) ) / 2  ( in [0, 1] )
+  // 1 - <y, t> / (|t|*|y|)  ( in [0, 1] )
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     
-    float_t m {0.5};
     auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
     return (0.0 == y_abs || 0.0 == t_abs) ?
-      m :
-      m * ( 1.0 - yt / (t_abs * y_abs) );
+      1.0 :
+      (1.0 - yt / (t_abs * y_abs));
   }
 
-  // (<y, t> * (y) - |y|^2 * (t)  ) / (|t|*|y|^3) / 2
+  // 2 * (<y, t> * y - |y|^2 * t  ) / (|t|*|y|^3)
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());
 
-    float_t m {0.5};
     auto [yt, y2, t2, y_abs, t_abs] = _norms(y, t);
 
     float_t d = y2 * y_abs * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
-      grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
+
+      grad[i]    = (0.0 == d) ?
         0.0 :
-        (m * (yt * yi - y2 * ti) / d);
+        2.0 * (yi * yt - ti * y2) / d;
     }    
 
     return grad;
@@ -243,8 +242,8 @@ class fined_cosine
 
     float_t d = y2 * y_abs * t_abs;
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      float_t yi = (y[i] - m);
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
       grad[i]    = (0.0 == y_abs || 0.0 == t_abs) ?
         ( (0.0 == y_abs) ? 0.0 : fine * yi / y_abs ) :
         ( m * (yt * yi - y2 * ti) / d + fine * yi / y_abs );
@@ -276,7 +275,7 @@ class gain {
     return (0.0 == t2) ? 2.0 : (2.0 - yt / t2);
   }
 
-  // - (t) / <t,t>
+  // - 2 * t / |t|^2
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());

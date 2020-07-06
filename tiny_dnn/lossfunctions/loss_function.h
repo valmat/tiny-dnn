@@ -178,7 +178,7 @@ struct _norms
 // Loss function based on cosine distances
 class cosine {
  public:
-  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|) ) / 2  ( in [0, 1] )
+  // ( 1 - <y, t> / (|t|*|y|) ) / 2  ( in [0, 1] )
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     
@@ -190,7 +190,7 @@ class cosine {
       m * ( 1.0 - yt / (t_abs * y_abs) );
   }
 
-  // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2
+  // (<y, t> * (y) - |y|^2 * (t)  ) / (|t|*|y|^3) / 2
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());
@@ -217,7 +217,7 @@ template<int fine_fract>
 class fined_cosine
 {
  public:
-  // ( 1 - <y-m, t-m> / (|t-m|*|y-m|)) / 2 + fine * |y-m|
+  // ( 1 - <y, t> / (|t|*|y|)) / 2 + fine * |y|
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
@@ -231,7 +231,7 @@ class fined_cosine
       (m * ( 1.0 - yt / (t_abs*y_abs) ) + fine * y_abs);
   }
 
-  // (<y-m, t-m> * (y-m) - |y-m|^2 * (t-m)  ) / (|t-m|*|y-m|^3) / 2 + fine * (y-m) / |y-m|
+  // (<y, t> * (y) - |y|^2 * (t)  ) / (|t|*|y|^3) / 2 + fine * (y) / |y|
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());
@@ -260,36 +260,36 @@ using fined_cosine01 = fined_cosine<10>;
 // This is a modification of the cosine distances
 class gain {
  public:
-  // 1 - <y-m, t-m> / <t-m,t-m>
+  // 2 - <y, t> / <t,t>
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t yt{0.0};
     float_t t2{0.0};
-    float_t m {0.5};
 
     for (size_t i = 0; i < y.size(); ++i) {
-      float_t ti = (t[i] - m);
-      yt        += ti * (y[i] - m);
+      float_t ti = 2.0 * (t[i] - 0.5);
+      float_t yi = 2.0 * (y[i] - 0.5);
+      yt        += ti * yi;
       t2        += ti * ti;
     }
 
-    return (0.0 == t2) ? 1.0 : (1.0 - yt / t2);
+    return (0.0 == t2) ? 2.0 : (2.0 - yt / t2);
   }
 
-  // - (t-m) / <t-m,t-m>
+  // - (t) / <t,t>
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     vec_t grad(t.size());
 
     float_t t2{0};
-    float_t m {0.5};
     for (size_t i = 0; i < t.size(); ++i) {
-      float_t ti = (t[i] - m);
+      float_t ti = 2.0 * (t[i] - 0.5);
       t2        += ti * ti;
     }    
 
     for (size_t i = 0; i < t.size(); ++i) {
-      grad[i] = (0.0 == t2) ? 0.0 : (m - t[i]) / t2;
+      float_t ti = 2.0 * (t[i] - 0.5);
+      grad[i]    = (0.0 == t2) ? 0.0 :  (- 2.0 * ti / t2);
     }
 
     return grad;
@@ -303,7 +303,7 @@ template<int fine_fract>
 class fined_gain
 {
  public:
-  // 1 - (<y-m, t-m> - fine*|y-m|) / (<t-m,t-m> - fine*|t-m|)
+  // 1 - (<y, t> - fine*|y|) / (<t,t> - fine*|t|)
   static float_t f(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
@@ -317,7 +317,7 @@ class fined_gain
       float_t(1.0) - (yt - fine * y_abs) / d;
   }
 
-  //  - ( (y-m) - fine*(y-m)/|y-m|) / (<t-m,t-m> - fine*|t-m|)
+  //  - ( (y) - fine*(y)/|y|) / (<t,t> - fine*|t|)
   static vec_t df(const vec_t &y, const vec_t &t) {
     assert(y.size() == t.size());
     float_t fine{1.0 / fine_fract};
